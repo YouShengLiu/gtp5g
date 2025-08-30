@@ -11,10 +11,26 @@
 #define AVG_WINDOW 1000 // ms
 #define BURST_DURATION 200 // ms
 
+/**
+ * newTrafficPolicer - Create a new traffic policer for rate limiting
+ * @kbitRate: Rate limit in Kbps
+ * 
+ * Creates a new traffic policer using two rate three color marker (trTCM) algorithm.
+ * Returns NULL if kbitRate is 0 to prevent division by zero errors.
+ * 
+ * Return: Pointer to TrafficPolicer on success, NULL on failure or zero rate
+ */
 TrafficPolicer* newTrafficPolicer(u64 kbitRate) {
     TrafficPolicer* p = (TrafficPolicer*)kmalloc(sizeof(TrafficPolicer), GFP_KERNEL);
     if (p == NULL) {
         GTP5G_ERR(NULL, "traffic policer memory allocation error\n");
+        return NULL;
+    }
+    
+    // Prevent division by zero: if kbitRate is 0, return NULL instead of creating invalid policer
+    if (kbitRate == 0) {
+        GTP5G_INF(NULL, "traffic policer created with zero rate, returning NULL to prevent division by zero\n");
+        kfree(p);
         return NULL;
     }
     
@@ -59,7 +75,7 @@ Color policePacket(TrafficPolicer* p, int pktLen) {
 
     refillTokens = p->byteRate * p->refillTokenTime / NANOSECONDS_PER_SECOND;
 
-    if (refillTokens > 0) {
+    if (refillTokens > 0 && p->byteRate > 0) {
         u64 remainTime = p->refillTokenTime -
             (refillTokens * NANOSECONDS_PER_SECOND / p->byteRate);
         p->refillTokenTime = remainTime;
